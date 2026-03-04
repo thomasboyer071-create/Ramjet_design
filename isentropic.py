@@ -1,6 +1,5 @@
 """
-Converging-Diverging Nozzle
-===========================
+
 
 Calculate the area ratio vs. Mach number curve for a mixture accelerating to supersonic
 speed through a converging--diverging nozzle, assuming isentropic, adiabatic flow.
