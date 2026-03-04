@@ -17,6 +17,8 @@ import math
 import numpy as np
 import matplotlib.pyplot as plt
 
+print('hello word')
+
 # %%
 # Set initial conditions and get stagnation state parameters:
 gas = ct.Solution('h2o2.yaml')
