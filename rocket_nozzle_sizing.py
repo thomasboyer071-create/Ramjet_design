@@ -148,9 +148,9 @@ def calculate_initial_parameters_cantera(yaml_file, fuel_name, ox_name, P_1, OF,
 
 # --- SETUP ---
 P_1 = 30e5      # Chamber pressure in Pa
-P_3 = 101325    # Ambient pressure in Pa
+P_3 = 7504.8   # Ambient pressure in Pa
 F = 10000        # Desired thrust in Newtons
-OF = 2.5        # Oxidizer/Fuel ratio (Ajusté pour CH4/O2)
+OF = 4        # Oxidizer/Fuel ratio (Ajusté pour CH4/O2)
 
 Method = 1      # Spike nozzle contour method
 spike_detail = False 
