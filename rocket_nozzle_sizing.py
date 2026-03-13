@@ -313,40 +313,23 @@ conical_xy_1, conical_xy_2, conical_xy_3 = conical_nozzle(initial_params)
 bell_xy_1, bell_xy_2, bell_xy_3 = bell_nozzle(initial_params)
 spike_xy_1, spike_xy_2 = spike_nozzle(initial_params, spike_detail)
 
-print("Génération des fichiers Excel...")
-excel_writer = pd.ExcelWriter('Rocket_Nozzle_Contour_Coordinates.xlsx', engine='xlsxwriter')
+#print("Génération des fichiers Excel...")
+#excel_writer = pd.ExcelWriter('Rocket_Nozzle_Contour_Coordinates.xlsx', engine='xlsxwriter')
 
-conical_xy_1.to_excel(excel_writer, sheet_name='CONICAL', index=False, startrow=1, startcol=0)
-conical_xy_2.to_excel(excel_writer, sheet_name='CONICAL', index=False, startrow=1, startcol=3)
-conical_xy_3.to_excel(excel_writer, sheet_name='CONICAL', index=False, startrow=1, startcol=6)
+#conical_xy_1.to_excel(excel_writer, sheet_name='CONICAL', index=False, startrow=1, startcol=0)
+#conical_xy_2.to_excel(excel_writer, sheet_name='CONICAL', index=False, startrow=1, startcol=3)
+#conical_xy_3.to_excel(excel_writer, sheet_name='CONICAL', index=False, startrow=1, startcol=6)
 
-bell_xy_1.to_excel(excel_writer, sheet_name='BELL', index=False, startrow=1, startcol=0)
-bell_xy_2.to_excel(excel_writer, sheet_name='BELL', index=False, startrow=1, startcol=3)
-bell_xy_3.to_excel(excel_writer, sheet_name='BELL', index=False, startrow=1, startcol=6)
+#bell_xy_1.to_excel(excel_writer, sheet_name='BELL', index=False, startrow=1, startcol=0)
+#bell_xy_2.to_excel(excel_writer, sheet_name='BELL', index=False, startrow=1, startcol=3)
+#bell_xy_3.to_excel(excel_writer, sheet_name='BELL', index=False, startrow=1, startcol=6)
 
-spike_xy_1.to_excel(excel_writer, sheet_name='SPIKE', index=False, startrow=1, startcol=0)
-spike_xy_2.to_excel(excel_writer, sheet_name='SPIKE', index=False, startrow=1, startcol=3)
+#spike_xy_1.to_excel(excel_writer, sheet_name='SPIKE', index=False, startrow=1, startcol=0)
+#spike_xy_2.to_excel(excel_writer, sheet_name='SPIKE', index=False, startrow=1, startcol=3)
 
-excel_writer.save()
-print("Export Excel terminé.")
+#excel_writer.save()
+#print("Export Excel terminé.")
 
-def displayCAD(file_):
-  filename = file_
-  try:
-      mesh = pv.read(filename)
-      x, y, z = mesh.points.T
-      faces = mesh.faces.reshape(-1, 4)[:, 1:]
-
-      fig = go.Figure(data=[go.Mesh3d(
-          x=x, y=y, z=z,
-          i=faces[:, 0], j=faces[:, 1], k=faces[:, 2],
-          color='lightblue', opacity=0.5
-      )])
-
-      fig.update_layout(scene=dict(aspectmode='data'), title=f"Modèle 3D: {file_}")
-      fig.show()
-  except Exception as e:
-      print(f"Erreur d'affichage 3D: {e}")
 
 # --- CAD EXPORT SIMPLIFIÉ (Exemple Conical) ---
 # (La logique CadQuery reste fonctionnellement la même que dans ton code source)
