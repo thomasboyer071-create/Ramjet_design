@@ -1,0 +1,37 @@
+import cantera as ct
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Initialisation du gaz avec le mécanisme GRI-Mech
+gas = ct.Solution('nDodecane_Reitz.yaml')
+
+# Conditions initiales
+T0 = 300  # Température initiale (K)
+P0 = ct.one_atm  # Pression (Pa)
+
+# Plage de phi
+phis = np.linspace(0.5, 4.0, 100)
+Tad = []
+
+
+for phi in phis:
+    # Définir le mélange (méthane + air)
+    gas.set_equivalence_ratio(phi, fuel='c12h26', oxidizer={'O2':1.0, 'N2':3.76})
+    
+    # Fixer T et P initiales
+    gas.TP = T0, P0
+    
+    # Calcul équilibre HP (adiabatique)
+    gas.equilibrate('HP')
+    
+    # Stocker la température adiabatique
+    Tad.append(gas.T)
+
+# Plot
+plt.figure()
+plt.plot(phis, Tad)
+plt.xlabel('Equivalence ratio (phi)')
+plt.ylabel('Adiabatic flame temperature (K)')
+plt.title('Adiabatic Flame Temperature vs Phi (c12h26-Air)')
+plt.grid()
+plt.show()
