@@ -71,8 +71,8 @@ T02 = T01
 
 # --- 4. CHAMBRE DE COMBUSTION (MÉTHODE RAYLEIGH AVEC LHV) ---
 
-phi = 0.45
-M2_in = 0.3 # Mach entrée chambre
+phi = 0.05
+M2_in = 0.2 # Mach entrée chambre
 
 # Utilisation de Cantera pour Cp et Gamma précis
 gas.set_equivalence_ratio(phi, fuel=fuel, oxidizer=oxidizer)
@@ -128,10 +128,46 @@ A2 = mdot / (rho2 * M2_in * np.sqrt(gamma_in * 287 * T2_stat))
 A_col = (mdot * np.sqrt(T03)) / (P03 * np.sqrt(gamma_out/R_gaz) * (2/(gamma_out+1))**((gamma_out+1)/(2*(gamma_out-1))))
 A4 = (A_col/M4) * ((2/(gamma_out+1))*(1+(gamma_out-1)/2*M4**2))**((gamma_out+1)/(2*(gamma_out-1)))
 
-print(f"=== RÉSULTATS RAYLEIGH (LHV) ===\n")
-print(f"T03 (Rayleigh LHV) : {T03:.1f} K")
-print(f"Mach sortie M3     : {M3:.3f}")
-print(f"Pression totale P03: {P03/1e5:.3f} bar")
-print("-" * 30)
-print(f"Diamètre D2 (Chambre) : {200*np.sqrt(A2/np.pi):.2f} cm")
-print(f"Diamètre Dt (Col)     : {200*np.sqrt(A_col/np.pi):.2f} cm")
+
+# --- AFFICHAGE ---
+print(f"--- RÉSULTATS RAMJET (RAYLEIGH + CANTERA) ---")
+print(f"Angles diffuseur : {thetas} °")
+print(f"Rendement diffuseur : {eta_diff:.4f}")
+print(f"Température sortie foyer (T03) : {T03:.1f} K")
+print(f"Mach sortie foyer (M3) : {M3:.3f}")
+print(f"Perte de pression totale combustion : {100*(1-P03/P02):.1f} %")
+print(f"Debit d'air : {mdot:.1f} kg/s")
+print(f"Debit de carburant : {mdot * f:.4f} kg/s")
+print(f"vitesse d'ejection : {u4:.1f} m/s")
+print("-" * 40)
+print(f"Diamètre Capture (D1) : {200*np.sqrt(A1/np.pi):.2f} cm")
+print(f"Diamètre Chambre (D2) : {200*np.sqrt(A2/np.pi):.2f} cm")
+print(f"Diamètre Col (Dt)     : {200*np.sqrt(A_col/np.pi):.2f} cm")
+print(f"Diamètre Sortie (D4)  : {200*np.sqrt(A4/np.pi):.2f} cm")
+
+
+# --- 6. CALCUL DES PERFORMANCES PROPULSIVES ---
+
+# G0 (accélération de la pesanteur au niveau de la mer)
+g0 = 9.80665 
+
+# Débit massique de carburant (mdot_f = f * mdot_air)
+# f est le rapport massique carburant/air déjà calculé
+mdot_fuel = f * mdot
+# Impulsion Spécifique (s)
+isp = F_target / (mdot_fuel * g0)
+
+# Consommation spécifique (kg/h/N)
+# On multiplie par 3600 pour passer des secondes aux heures
+cs = (mdot_fuel / F_target) * 3600
+
+# Efficacité thermodynamique (sans unité)
+eta = (F_target * u1) / (mdot_fuel * LHV)
+
+
+# --- AFFICHAGE DES PERFORMANCES ---
+print(f"\n=== PERFORMANCES PROPULSIVES ===")
+print(f"Débit massique carburant : {mdot_fuel:.4f} kg/s")
+print(f"Isp : {isp:.2f} s")
+print(f"cs  : {cs:.6f} kg/h/N")
+print(f"η   : {eta:.4f} ({eta*100:.2f} %)")
