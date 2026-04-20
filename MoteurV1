@@ -2,172 +2,181 @@ import cantera as ct
 import numpy as np
 import scipy.optimize as opt
 import matplotlib.pyplot as plt
+import os
 
-# --- SOUS-FONCTIONS GÉOMÉTRIE DIFFUSEUR (Traduites de ton MATLAB) ---
+# =============================================================================
+# --- PARAMÈTRES D'ENTRÉE (USER INPUTS) ---
+# =============================================================================
 
-def oblique_shock_wave(M1, M1n, g):
-    beta = np.arcsin(M1n/M1)
-    # Formule theta-beta-Mach
-    theta = np.arctan(2*(1/np.tan(beta))*(M1**2 * np.sin(beta)**2 - 1) / (M1**2 * (g + np.cos(2*beta)) + 2))
-    M2n = np.sqrt((M1n**2 + 2/(g-1)) / (2*g/(g-1)*M1n**2 - 1))
-    M2 = M2n / np.sin(beta - theta)
-    return beta, theta, M2n, M2
+# Conditions de vol & Cible
+h_alt = 18000          # Altitude [m]
+m1_vol = 2.7           # Nombre de Mach de vol
+f_target = 10000       # Poussée cible [N]
 
-def calculer_geo_diffuseur(M1, Me, n_chocs, g=1.4):
-    # Me est le Mach avant le choc droit
-    M_target_oblique = np.sqrt(((Me**2)+(2/(g-1)))/(2*g/(g-1)*(Me**2)-1))
-    
-    k = 1.0
-    M_last = 2.0
-    M1n_test = 0
+# Paramètres du Diffuseur
+me_diff_target = 0.8   # Mach cible avant le choc droit
+n_rampes = 3           # Nombre de chocs obliques
+gamma_air = 1.4        # Gamma air frais
+
+# Paramètres de la Chambre de Combustion (Rayleigh)
+phi = 0.05             # Richesse (Equivalence ratio)
+m2_in = 0.2            # Mach imposé en entrée de chambre
+eta_comb = 0.98        # Rendement de combustion
+lhv_fuel = 44.1e6      # Pouvoir Calorifique Inférieur [J/kg]
+
+# Configuration Cantera
+mech_file = 'nDodecane_Reitz.yaml'
+fuel_name = 'c12h26'
+oxidizer = {'O2': 1.0, 'N2': 3.76}
+
+# Constantes physiques
+g0 = 9.80665           # Gravité [m/s^2]
+r_air = 287.05         # Constante air [J/kg/K]
+
+# =============================================================================
+# --- SOUS-FONCTIONS (MODÈLES PHYSIQUES) ---
+# =============================================================================
+
+def oblique_shock_wave(m1, m1n, g):
+    beta = np.arcsin(m1n/m1)
+    theta = np.arctan(2*(1/np.tan(beta))*(m1**2 * np.sin(beta)**2 - 1) / (m1**2 * (g + np.cos(2*beta)) + 2))
+    m2n = np.sqrt((m1n**2 + 2/(g-1)) / (2*g/(g-1)*m1n**2 - 1))
+    m2 = m2n / np.sin(beta - theta)
+    return beta, theta, m2n, m2
+
+def calculer_geo_diffuseur(m1, me, n_chocs, g):
+    m_target_oblique = np.sqrt(((me**2)+(2/(g-1)))/(2*g/(g-1)*(me**2)-1))
+    k, m_last = 1.0, 2.0
     temp_thetas = np.zeros(n_chocs)
-    
-    while abs(M_target_oblique - M_last) > 0.001 and k > 0.3:
-        M1n_test = M_target_oblique / k
-        if M1n_test >= M1 or M1n_test <= 1:
-            break
-        
-        M_current = M1
+    while abs(m_target_oblique - m_last) > 0.001 and k > 0.3:
+        m1n_test = m_target_oblique / k
+        if m1n_test >= m1 or m1n_test <= 1: break
+        m_current = m1
         for nn in range(n_chocs):
-            _, th, _, M2_next = oblique_shock_wave(M_current, M1n_test, g)
+            _, th, _, m2_next = oblique_shock_wave(m_current, m1n_test, g)
             temp_thetas[nn] = th
-            M_current = M2_next
-        
-        M_last = M_current
+            m_current = m2_next
+        m_last = m_current
         k -= 0.0001
-        
-    if k <= 0.3 or M1n_test >= M1:
-        return None, None
-    else:
-        # Calcul du rendement de pression totale
-        r_tp_oblique = (((((g+1)/2)*M1n_test**2)/(1+((g-1)/2)*M1n_test**2))**(g/(g-1))) / \
-                       ((2*g/(g+1)*(M1n_test**2)-((g-1)/(g+1)))**(1/(g-1)))
-        r_tp_normal = (((((g+1)/2)*M_target_oblique**2)/(1+((g-1)/2)*M_target_oblique**2))**(g/(g-1))) / \
-                      ((2*g/(g+1)*(M_target_oblique**2)-((g-1)/(g+1)))**(1/(g-1)))
-        
-        rendement = (r_tp_oblique**n_chocs) * r_tp_normal
-        return np.degrees(temp_thetas), rendement
+    if k <= 0.3: return None, None
+    r_tp_oblique = (((((g+1)/2)*m1n_test**2)/(1+((g-1)/2)*m1n_test**2))**(g/(g-1))) / \
+                   ((2*g/(g+1)*(m1n_test**2)-((g-1)/(g+1)))**(1/(g-1)))
+    r_tp_normal = (((((g+1)/2)*m_target_oblique**2)/(1+((g-1)/2)*m_target_oblique**2))**(g/(g-1))) / \
+                  ((2*g/(g+1)*(m_target_oblique**2)-((g-1)/(g+1)))**(1/(g-1)))
+    return np.degrees(temp_thetas), (r_tp_oblique**n_chocs) * r_tp_normal
 
-# --- PROGRAMME PRINCIPAL ---
 
-gas = ct.Solution('nDodecane_Reitz.yaml')
-fuel, oxidizer = 'c12h26', {'O2': 1.0, 'N2': 3.76}
-LHV = 44.1e6      # J/kg
-eta_comb = 0.98
-F_target = 10000  # N
-M1_vol = 2.7
-P1, T1 = 7504.8, 216.65 # 18km
+def get_atmos_isa(h):
+    """ Calcule p, t, rho et a selon le modèle ISA jusqu'à 20km """
+    t0_sl = 288.15      # K (Niveau mer)
+    p0_sl = 101325.0    # Pa (Niveau mer)
+    l_grad = 0.0065     # Gradient thermique (K/m)
+    r = 287.05
+    g = 9.80665
+    
+    if h <= 11000: # Troposphère
+        t = t0_sl - l_grad * h
+        p = p0_sl * (t / t0_sl)**(g / (l_grad * r))
+    else: # Stratosphère (jusqu'à 20km)
+        t_11 = t0_sl - l_grad * 11000
+        p_11 = p0_sl * (t_11 / t0_sl)**(g / (l_grad * r))
+        t = t_11 # Température constante
+        p = p_11 * np.exp(-g * (h - 11000) / (r * t))
+    
+    rho = p / (r * t)
+    a = np.sqrt(1.4 * r * t)
+    return p, t, rho, a
 
-# --- 3. CALCUL DIFFUSEUR ---
+# =============================================================================
+# --- RÉSOLUTION DU CYCLE ---
+# =============================================================================
 
-Me_diff = 0.8
-n_rampes = 3
-thetas, eta_diff = calculer_geo_diffuseur(M1_vol, Me_diff, n_rampes, 1.4)
+# 1. Conditions atmosphériques (ISA 18km approx)
+p1_amb, t1_amb = 7504.8, 216.65 
+rho1_amb = p1_amb / (r_air * t1_amb)
+u1_vol = m1_vol * np.sqrt(gamma_air * r_air * t1_amb)
 
-T01 = T1 * (1 + 0.2 * M1_vol**2)
-P01 = P1 * (1 + 0.2 * M1_vol**2)**3.5
-P02 = P01 * eta_diff
-T02 = T01 
+# 2. Diffuseur
+thetas, eta_diff = calculer_geo_diffuseur(m1_vol, me_diff_target, n_rampes, gamma_air)
+t01 = t1_amb * (1 + (gamma_air-1)/2 * m1_vol**2)
+p01 = p1_amb * (1 + (gamma_air-1)/2 * m1_vol**2)**(gamma_air/(gamma_air-1))
+p02 = p01 * eta_diff
+t02 = t01 
 
-# --- 4. CHAMBRE DE COMBUSTION (MÉTHODE RAYLEIGH AVEC LHV) ---
-
-phi = 0.05
-M2_in = 0.2 # Mach entrée chambre
-
-# Utilisation de Cantera pour Cp et Gamma précis
-gas.set_equivalence_ratio(phi, fuel=fuel, oxidizer=oxidizer)
-T2_stat = T02 / (1 + 0.2 * M2_in**2)
-gas.TP = T2_stat, P02 / (1 + 0.2 * M2_in**2)**3.5
+# 3. Combustion (Rayleigh + Cantera)
+gas = ct.Solution(mech_file)
+gas.set_equivalence_ratio(phi, fuel=fuel_name, oxidizer=oxidizer)
+t2_stat = t02 / (1 + (gamma_air-1)/2 * m2_in**2)
+p2_stat = p02 / (1 + (gamma_air-1)/2 * m2_in**2)**(gamma_air/(gamma_air-1))
+gas.TP = t2_stat, p2_stat
 
 cp_in = gas.cp_mass
 gamma_in = gas.cp_mass / gas.cv_mass
 
-# Simulation d'une combustion HP pour avoir le Cp de sortie
+# Propriétés de sortie via Cantera
 gas.equilibrate('HP')
 cp_out = gas.cp_mass
 gamma_out = gas.cp_mass / gas.cv_mass
-R_gaz = ct.gas_constant / gas.mean_molecular_weight
+r_gaz = ct.gas_constant / gas.mean_molecular_weight
 
-# Calcul du T03 via Rayleigh (LHV)
+# Calcul Rayleigh
 cp_mean = (cp_in + cp_out) / 2
 gamma_mean = (gamma_in + gamma_out) / 2
-gas.set_equivalence_ratio(1.0, fuel=fuel, oxidizer=oxidizer) # Pour fst
-y_f_st = gas.mass_fraction_dict()[fuel]
+
+gas.set_equivalence_ratio(1.0, fuel=fuel_name, oxidizer=oxidizer)
+y_f_st = gas.mass_fraction_dict()[fuel_name]
 fst = y_f_st / (1 - y_f_st)
-f = phi * fst
+f_ratio = phi * fst
 
-q = (f / (1 + f)) * LHV * eta_comb
-T03 = T02 + q / cp_mean
+q_add = (f_ratio / (1 + f_ratio)) * lhv_fuel * eta_comb
+t03 = t02 + q_add / cp_mean
 
-# Résolution Mach de sortie M3
-def rayleigh_solve(M):
-    ratio_target = T02 / T03
-    val = ((M2_in/M)**2 * ((1 + gamma_mean*M**2)/(1 + gamma_mean*M2_in**2))**2 * (1 + (gamma_mean-1)/2 * M**2) / (1 + (gamma_mean-1)/2 * M2_in**2))
-    return val - ratio_target
+def rayleigh_solve(m):
+    ratio_target = t02 / t03
+    return ((m2_in/m)**2 * ((1 + gamma_mean*m**2)/(1 + gamma_mean*m2_in**2))**2 * (1 + (gamma_mean-1)/2 * m**2) / (1 + (gamma_mean-1)/2 * m2_in**2)) - ratio_target
 
-M3 = opt.fsolve(rayleigh_solve, 0.5)[0]
+m3 = opt.fsolve(rayleigh_solve, 0.5)[0]
+p3_stat = p2_stat * (1 + gamma_mean * m2_in**2) / (1 + gamma_mean * m3**2)
+p03 = p3_stat * (1 + (gamma_out-1)/2 * m3**2)**(gamma_out/(gamma_out-1))
 
-# Pressions via Rayleigh
-P2_stat = P02 / (1 + (gamma_in-1)/2 * M2_in**2)**(gamma_in/(gamma_in-1))
-P3_stat = P2_stat * (1 + gamma_mean * M2_in**2) / (1 + gamma_mean * M3**2)
-P03 = P3_stat * (1 + (gamma_mean-1)/2 * M3**2)**(gamma_mean/(gamma_mean-1))
+# 4. Tuyère & Poussée
+p4 = p1_amb
+m4 = np.sqrt((2/(gamma_out-1)) * ((p03/p4)**((gamma_out-1)/gamma_out) - 1))
+t4 = t03 / (1 + (gamma_out-1)/2 * m4**2)
+u4 = m4 * np.sqrt(gamma_out * r_gaz * t4)
+mdot_air = f_target / (u4 - u1_vol)
+mdot_fuel = f_ratio * mdot_air
 
-# --- 5. TUYÈRE & DIMENSIONS ---
+# 5. Dimensions
+a1 = mdot_air / (rho1_amb * u1_vol)
+rho2 = p2_stat / (r_air * t2_stat)
+a2 = mdot_air / (rho2 * m2_in * np.sqrt(gamma_in * r_air * t2_stat))
+a_col = (mdot_air * np.sqrt(t03)) / (p03 * np.sqrt(gamma_out/r_gaz) * (2/(gamma_out+1))**((gamma_out+1)/(2*(gamma_out-1))))
+a4 = (a_col/m4) * ((2/(gamma_out+1))*(1+(gamma_out-1)/2*m4**2))**((gamma_out+1)/(2*(gamma_out-1)))
 
-P4 = P1
-M4 = np.sqrt((2/(gamma_out-1)) * ((P03/P4)**((gamma_out-1)/gamma_out) - 1))
-T4 = T03 / (1 + (gamma_out-1)/2 * M4**2)
-u4 = M4 * np.sqrt(gamma_out * R_gaz * T4)
-u1 = M1_vol * np.sqrt(1.4 * 287 * T1)
-mdot = F_target / (u4 - u1)
+# 6. Performances
+isp = f_target / (mdot_fuel * g0)
+cs = (mdot_fuel / f_target) * 3600
+eta_thermo = (f_target * u1_vol) / (mdot_fuel * lhv_fuel)
 
-# Sections
-A1 = mdot / (0.1207 * u1)
-rho2 = P2_stat / (287 * T2_stat)
-A2 = mdot / (rho2 * M2_in * np.sqrt(gamma_in * 287 * T2_stat))
-A_col = (mdot * np.sqrt(T03)) / (P03 * np.sqrt(gamma_out/R_gaz) * (2/(gamma_out+1))**((gamma_out+1)/(2*(gamma_out-1))))
-A4 = (A_col/M4) * ((2/(gamma_out+1))*(1+(gamma_out-1)/2*M4**2))**((gamma_out+1)/(2*(gamma_out-1)))
+# =============================================================================
+# --- AFFICHAGE DES RÉSULTATS ---
+# =============================================================================
 
-
-# --- AFFICHAGE ---
-print(f"--- RÉSULTATS RAMJET (RAYLEIGH + CANTERA) ---")
+print(f"--- RÉSULTATS RAMJET (M={m1_vol} @ {h_alt}m) ---")
 print(f"Angles diffuseur : {thetas} °")
-print(f"Rendement diffuseur : {eta_diff:.4f}")
-print(f"Température sortie foyer (T03) : {T03:.1f} K")
-print(f"Mach sortie foyer (M3) : {M3:.3f}")
-print(f"Perte de pression totale combustion : {100*(1-P03/P02):.1f} %")
-print(f"Debit d'air : {mdot:.1f} kg/s")
-print(f"Debit de carburant : {mdot * f:.4f} kg/s")
-print(f"vitesse d'ejection : {u4:.1f} m/s")
-print("-" * 40)
-print(f"Diamètre Capture (D1) : {200*np.sqrt(A1/np.pi):.2f} cm")
-print(f"Diamètre Chambre (D2) : {200*np.sqrt(A2/np.pi):.2f} cm")
-print(f"Diamètre Col (Dt)     : {200*np.sqrt(A_col/np.pi):.2f} cm")
-print(f"Diamètre Sortie (D4)  : {200*np.sqrt(A4/np.pi):.2f} cm")
-
-
-# --- 6. CALCUL DES PERFORMANCES PROPULSIVES ---
-
-# G0 (accélération de la pesanteur au niveau de la mer)
-g0 = 9.80665 
-
-# Débit massique de carburant (mdot_f = f * mdot_air)
-# f est le rapport massique carburant/air déjà calculé
-mdot_fuel = f * mdot
-# Impulsion Spécifique (s)
-isp = F_target / (mdot_fuel * g0)
-
-# Consommation spécifique (kg/h/N)
-# On multiplie par 3600 pour passer des secondes aux heures
-cs = (mdot_fuel / F_target) * 3600
-
-# Efficacité thermodynamique (sans unité)
-eta = (F_target * u1) / (mdot_fuel * LHV)
-
-
-# --- AFFICHAGE DES PERFORMANCES ---
-print(f"\n=== PERFORMANCES PROPULSIVES ===")
-print(f"Débit massique carburant : {mdot_fuel:.4f} kg/s")
-print(f"Isp : {isp:.2f} s")
-print(f"cs  : {cs:.6f} kg/h/N")
-print(f"η   : {eta:.4f} ({eta*100:.2f} %)")
+print(f"Rendement diffuseur (p02/p01) : {eta_diff:.4f}")
+print(f"Température sortie foyer (t03) : {t03:.1f} K")
+print(f"Mach sortie foyer (m3) : {m3:.3f}")
+print(f"Perte p0 combustion : {100*(1-p03/p02):.1f} %")
+print(f"Débit d'air : {mdot_air:.2f} kg/s | Débit fuel : {mdot_fuel:.4f} kg/s")
+print(f"Vitesse d'éjection u4 : {u4:.1f} m/s")
+print("-" * 45)
+print(f"Diamètre Capture (d1) : {200*np.sqrt(a1/np.pi):.2f} cm")
+print(f"Diamètre Chambre (d2) : {200*np.sqrt(a2/np.pi):.2f} cm")
+print(f"Diamètre Col (dt)     : {200*np.sqrt(a_col/np.pi):.2f} cm")
+print(f"Diamètre Sortie (d4)  : {200*np.sqrt(a4/np.pi):.2f} cm")
+print("-" * 45)
+print(f"Impulsion Spécifique (isp)    : {isp:.1f} s")
+print(f"Consommation Spécifique (cs) : {cs:.6f} kg/h/N")
+print(f"Efficacité Thermodynamique (η): {eta_thermo*100:.2f} %")
