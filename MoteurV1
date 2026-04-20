@@ -19,10 +19,10 @@ n_rampes = 3           # Nombre de chocs obliques
 gamma_air = 1.4        # Gamma air frais
 
 # Paramètres de la Chambre de Combustion (Rayleigh)
-phi = 0.3             # Richesse (Equivalence ratio)
-m2_in = 0.25            # Mach imposé en entrée de chambre
+phi = 0.25             # Richesse (Equivalence ratio)
+m2_in = 0.3            # Mach imposé en entrée de chambre
 eta_comb = 0.98        # Rendement de combustion
-lhv_fuel = 44.1e6      # Pouvoir Calorifique Inférieur [J/kg]
+lhv_fuel = 43.4e6      # Pouvoir Calorifique Inférieur [J/kg]
 
 # Configuration Cantera
 mech_file = 'nDodecane_Reitz.yaml'
@@ -185,6 +185,8 @@ u4 = m4 * np.sqrt(gamma_out * r_gaz * t4)
 mdot_air = f_target / (u4 - u1_vol)
 mdot_fuel = f_ratio * mdot_air
 
+
+
 # 5. Dimensions
 # On suppose que les onde de chocs se joingne toute sur la ligne de capture (x_lip, y_lip) = (0.0, 1.0)
 # Wcap=W1=W2 
@@ -233,6 +235,7 @@ print(f"Section levre diffuseur (A1) : {A1:.3f} m²")
 print(f"Section entrée chambre de combustion (A2) : {A2:.3f} m²")
 print(f"Section col tuyere (Acol) : {a_col:.2f} m²")
 print(f"Section de sortie (A4)  : {a4:.3f} m²")
+print(f"Rapport section tuyere  : {a4/a_col:.3f}")
 print("-" * 45)
 print(f"Impulsion Spécifique (isp)    : {isp:.1f} s")
 print(f"Consommation Spécifique (cs) : {cs:.6f} kg/h/N")
