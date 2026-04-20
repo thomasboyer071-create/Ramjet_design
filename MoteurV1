@@ -19,8 +19,8 @@ n_rampes = 3           # Nombre de chocs obliques
 gamma_air = 1.4        # Gamma air frais
 
 # Paramètres de la Chambre de Combustion (Rayleigh)
-phi = 0.05             # Richesse (Equivalence ratio)
-m2_in = 0.2            # Mach imposé en entrée de chambre
+phi = 0.3             # Richesse (Equivalence ratio)
+m2_in = 0.25            # Mach imposé en entrée de chambre
 eta_comb = 0.98        # Rendement de combustion
 lhv_fuel = 44.1e6      # Pouvoir Calorifique Inférieur [J/kg]
 
@@ -44,24 +44,62 @@ def oblique_shock_wave(m1, m1n, g):
     m2 = m2n / np.sin(beta - theta)
     return beta, theta, m2n, m2
 
+#def calculer_geo_diffuseur(m1, me, n_chocs, g):
+#    m_target_oblique = np.sqrt(((me**2)+(2/(g-1)))/(2*g/(g-1)*(me**2)-1))
+#    k, m_last = 1.0, 2.0
+#    temp_thetas = np.zeros(n_chocs)
+#    while abs(m_target_oblique - m_last) > 0.001 and k > 0.3:
+#        m1n_test = m_target_oblique / k
+#        if m1n_test >= m1 or m1n_test <= 1: break
+#        m_current = m1
+#        for nn in range(n_chocs):
+#            _, th, _, m2_next = oblique_shock_wave(m_current, m1n_test, g)
+#            temp_thetas[nn] = th
+#            m_current = m2_next
+#        m_last = m_current
+#        k -= 0.0001
+#    if k <= 0.3: return None, None
+#    r_tp_oblique = (((((g+1)/2)*m1n_test**2)/(1+((g-1)/2)*m1n_test**2))**(g/(g-1))) /((2*g/(g+1)*(m1n_test**2)-((g-1)/(g+1)))**(1/(g-1)))
+#    r_tp_normal = (((((g+1)/2)*m_target_oblique**2)/(1+((g-1)/2)*m_target_oblique**2))**(g/(g-1)))/((2*g/(g+1)*(m_target_oblique**2)-((g-1)/(g+1)))**(1/(g-1)))
+#    return np.degrees(temp_thetas), (r_tp_oblique**n_chocs) * r_tp_normal
+#
+
 def calculer_geo_diffuseur(m1, me, n_chocs, g):
+    # Calcul du Mach cible après les chocs obliques (avant le choc droit)
     m_target_oblique = np.sqrt(((me**2)+(2/(g-1)))/(2*g/(g-1)*(me**2)-1))
+    
     k, m_last = 1.0, 2.0
     temp_thetas = np.zeros(n_chocs)
+    temp_betas = np.zeros(n_chocs) # Ajout pour stocker les betas
+    
     while abs(m_target_oblique - m_last) > 0.001 and k > 0.3:
         m1n_test = m_target_oblique / k
-        if m1n_test >= m1 or m1n_test <= 1: break
+        if m1n_test >= m1 or m1n_test <= 1: 
+            break
+            
         m_current = m1
         for nn in range(n_chocs):
-            _, th, _, m2_next = oblique_shock_wave(m_current, m1n_test, g)
+            # On récupère beta et theta de la fonction oblique_shock_wave
+            beta, th, _, m2_next = oblique_shock_wave(m_current, m1n_test, g)
             temp_thetas[nn] = th
+            temp_betas[nn] = beta # Stockage du beta local
             m_current = m2_next
+            
         m_last = m_current
         k -= 0.0001
-    if k <= 0.3: return None, None
-    r_tp_oblique = (((((g+1)/2)*m1n_test**2)/(1+((g-1)/2)*m1n_test**2))**(g/(g-1))) /((2*g/(g+1)*(m1n_test**2)-((g-1)/(g+1)))**(1/(g-1)))
-    r_tp_normal = (((((g+1)/2)*m_target_oblique**2)/(1+((g-1)/2)*m_target_oblique**2))**(g/(g-1)))/((2*g/(g+1)*(m_target_oblique**2)-((g-1)/(g+1)))**(1/(g-1)))
-    return np.degrees(temp_thetas), (r_tp_oblique**n_chocs) * r_tp_normal
+        
+    if k <= 0.3: 
+        return None, None, None
+        
+    # Calcul des rendements de pression génératrice
+    r_tp_oblique = (((((g+1)/2)*m1n_test**2)/(1+((g-1)/2)*m1n_test**2))**(g/(g-1))) / \
+                   ((2*g/(g+1)*(m1n_test**2)-((g-1)/(g+1)))**(1/(g-1)))
+    
+    r_tp_normal = (((((g+1)/2)*m_target_oblique**2)/(1+((g-1)/2)*m_target_oblique**2))**(g/(g-1))) / \
+                  ((2*g/(g+1)*(m_target_oblique**2)-((g-1)/(g+1)))**(1/(g-1)))
+                  
+    # On retourne les angles en degrés pour les thétas, et en radians pour les bétas (plus simple pour le plot)
+    return np.degrees(temp_thetas), temp_betas, (r_tp_oblique**n_chocs) * r_tp_normal
 
 
 def get_atmos_isa(h):
@@ -95,15 +133,13 @@ rho1_amb = p1_amb / (r_air * t1_amb)
 u1_vol = m1_vol * np.sqrt(gamma_air * r_air * t1_amb)
 
 # 2. Diffuseur supersonic 
-thetas, eta_diff = calculer_geo_diffuseur(m1_vol, me_diff_target, n_rampes, gamma_air)
+thetas, betas, eta_diff = calculer_geo_diffuseur(m1_vol, me_diff_target, n_rampes, gamma_air)
 t01 = t1_amb * (1 + (gamma_air-1)/2 * m1_vol**2)
 p01 = p1_amb * (1 + (gamma_air-1)/2 * m1_vol**2)**(gamma_air/(gamma_air-1))
 p02 = p01 * eta_diff
 t02 = t01 
 
 # 2.1 Diffuseur subsonic
-
-
 
 # 3. Combustion (Rayleigh + Cantera)
 gas = ct.Solution(mech_file)
@@ -203,119 +239,39 @@ print(f"Consommation Spécifique (cs) : {cs:.6f} kg/h/N")
 print(f"Efficacité Thermodynamique (η): {eta_thermo*100:.2f} %")
 
 
+# =============================================================================
+# --- RAPPORT POUR CONCEPTION SOLIDWORKS (PROFONDEUR W = 0.3m) ---
+# =============================================================================
+profondeur = 0.4  # [m]
 
-def get_beta(m, theta_deg, g=1.4):
-    """Calcule beta (angle du choc) pour un Mach et un theta donnés (faible intensité)"""
-    theta = np.radians(theta_deg)
-    def func(beta):
-        return np.tan(theta) - (2/np.tan(beta)) * (m**2 * np.sin(beta)**2 - 1) / (m**2 * (g + np.cos(2*beta)) + 2)
-    
-    # On cherche la solution entre l'angle de Mach et 90°
-    from scipy.optimize import brentq
-    beta_min = np.arcsin(1/m) + 1e-5
-    return brentq(func, beta_min, np.pi/2 - 1e-5)
+# Calcul des hauteurs réelles (H = A / W)
+h_cap_sw = A_cap / profondeur
+h_1_sw   = A1 / profondeur
+h_2_sw   = A2 / profondeur
 
-# --- Paramètres issus de tes calculs ---
-h_cap = np.sqrt(A_cap)  # Hauteur de capture
-x_lip = 0.0             # On fixe la lèvre arbitrairement en x ou on la calcule
-y_lip = h_cap
+print("="*60)
+print(f"{'DONNÉES DE CONCEPTION CAO (SOLIDWORKS)':^60}")
+print("="*60)
+print(f"Profondeur du diffuseur (Largeur) : {profondeur:.3f} m")
+print("-" * 60)
 
-# Initialisation des listes de géométrie
-x_nodes = [0.0]
-y_nodes = [0.0]
-betas = []
-m_local = m1_vol
-theta_cumul = 0
+# 1. Angles des Rampes (pour l'outil 'Esquisse' de SolidWorks)
+print(f"--- ANGLES DES RAMPES (Incrémentaux) ---")
+for i, th in enumerate(thetas):
+    print(f"Angle Rampe {i+1} : {th:.3f}°")
 
-# 1. CALCUL DES RAMPES (Focusing)
-# Le premier choc part de (x0, y0) et doit toucher (x_lip, y_lip)
-# On calcule x_nodes[0] à partir de y_lip et beta1
-beta1 = get_beta(m1_vol, thetas[0], gamma_air)
-dist_x_total = y_lip / np.tan(beta1)
-x_nodes[0] = 0.0 # Point de départ de la première rampe
+print(f"\n--- ANGLES DES CHOCS (Vérification) ---")
+for i, b in enumerate(betas):
+    print(f"Angle Choc {i+1} (Beta local) : {np.degrees(b):.3f}°")
 
-# On itère pour trouver les points de rencontre des chocs sur la lèvre
-current_x = 0.0
-current_y = 0.0
-m_current = m1_vol
-theta_node_cumul = 0
+print("-" * 60)
 
-all_betas_abs = [] # Angles beta par rapport à l'horizontale
+# 2. Hauteurs de passage (Verticales)
+print(f"--- HAUTEURS DE PASSAGE (Y) ---")
+print(f"Hauteur de Capture (H_cap) : {h_cap_sw * 100:.2f} cm")
+print(f"Hauteur de Gorge   (H_1)   : {h_1_sw * 100:.2f} cm")
+print(f"Hauteur de Sortie  (H_2)   : {h_2_sw * 100:.2f} cm")
 
-for i in range(n_rampes):
-    # Angle du choc local
-    beta_loc = get_beta(m_current, thetas[i], gamma_air)
-    beta_abs = beta_loc + theta_node_cumul
-    all_betas_abs.append(beta_abs)
-    
-    # On calcule l'intersection du choc i avec la lèvre (x_lip, y_lip)
-    # L'équation du choc est : y - y_node = tan(beta_abs) * (x - x_node)
-    # On veut que ce choc passe par (x_lip, y_lip)
-    # x_lip est défini par la portée du premier choc
-    if i == 0:
-        x_lip_calc = y_lip / np.tan(beta_abs)
-        
-    # Calcul du prochain Mach après choc oblique
-    m1n = m_current * np.sin(beta_loc)
-    m2n = np.sqrt((m1n**2 + 2/(gamma_air-1)) / (2*gamma_air/(gamma_air-1)*m1n**2 - 1))
-    m_current = m2n / np.sin(beta_loc - np.radians(thetas[i]))
-    
-    # Position du prochain sommet de rampe
-    # Il est à l'intersection du choc suivant (i+1) et de la paroi actuelle
-    if i < n_rampes - 1:
-        theta_node_cumul += np.radians(thetas[i])
-        # Cette partie nécessite de résoudre l'intersection entre la rampe et le choc
-        # Pour simplifier le tracé exact du "focus", on trace les lignes de choc 
-        # partant de la lèvre vers les rampes
-        pass
+print("-" * 60)
 
-# --- 2. RECONSTRUCTION GÉOMÉTRIQUE PRÉCISE ---
-# Pour un dessin "Shock-on-Lip", on définit souvent la lèvre comme origine (x_lip, y_lip)
-# et on projette vers l'arrière.
-x_lip, y_lip = 1.0, h_cap # On place la lèvre à x=1 pour projeter vers l'arrière
-x_p = [x_lip - h_cap/np.tan(all_betas_abs[0])] # Point de départ rampe 1
-y_p = [0.0]
 
-current_m = m1_vol
-current_theta = 0
-for i in range(n_rampes):
-    beta_abs = all_betas_abs[i]
-    # Tracer de la rampe jusqu'au prochain choc
-    # (Géométrie simplifiée pour le rendu : segments de rampe rejoignant les chocs)
-    step = 0.15
-    current_theta += np.radians(thetas[i])
-    x_p.append(x_p[-1] + step * np.cos(current_theta))
-    y_p.append(y_p[-1] + step * np.sin(current_theta))
-
-# --- 3. TRACÉ ---
-plt.figure(figsize=(12, 6))
-
-# Dessin des chocs (Lignes de Mach/Choc)
-for i in range(n_rampes):
-    plt.plot([x_p[i], x_lip], [y_p[i], y_lip], '--', label=f'Choc oblique {i+1}', alpha=0.8)
-
-# Choc Normal (Gorge)
-plt.plot([x_p[-1], x_lip], [y_p[-1], y_lip], 'r-', lw=2, label='Choc Normal')
-
-# Corps du diffuseur
-# Ajout du diffuseur subsonique à 7°
-l_sub = (np.sqrt(A2) - y_p[-1]) / np.tan(np.radians(7))
-x_p.append(x_p[-1] + l_sub)
-y_p.append(np.sqrt(A2))
-
-plt.plot(x_p, y_p, 'k-', lw=3, label='Corps du moteur')
-plt.fill_between(x_p, -0.1, y_p, color='gray', alpha=0.1)
-
-# Lèvre
-plt.plot([x_lip, x_lip + 0.5], [y_lip, y_lip], 'r-', lw=4, label='Cowl (Lèvre)')
-
-# Mise en forme
-plt.gca().set_aspect('equal')
-plt.xlim(x_p[0]-0.1, x_lip+0.5)
-plt.ylim(-0.1, y_p[-1]+0.2)
-plt.title(f"Géométrie exacte Shock-on-Lip (M={m1_vol})")
-plt.xlabel("X [m]")
-plt.ylabel("Y [m]")
-plt.legend()
-plt.grid(True, which='both', linestyle='--', alpha=0.5)
-plt.show()
