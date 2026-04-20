@@ -187,6 +187,8 @@ mdot_fuel = f_ratio * mdot_air
 
 
 
+mdot_air2=f_target/((1+f_ratio)*u4-u1_vol)
+mdot_fuel2=mdot_air2*f_ratio
 # 5. Dimensions
 # On suppose que les onde de chocs se joingne toute sur la ligne de capture (x_lip, y_lip) = (0.0, 1.0)
 # Wcap=W1=W2 
@@ -227,7 +229,9 @@ print(f"Rendement diffuseur (p02/p01) : {eta_diff:.4f}")
 print(f"Température sortie foyer (t03) : {t03:.1f} K")
 print(f"Mach sortie foyer (m3) : {m3:.3f}")
 print(f"Perte p0 combustion : {100*(1-p03/p02):.1f} %")
+print(f"gamma gaz (g_out) : {gamma_out:.3f}")
 print(f"Débit d'air : {mdot_air:.2f} kg/s | Débit fuel : {mdot_fuel:.4f} kg/s")
+print(f"Débit d'air : {mdot_air2:.2f} kg/s | Débit fuel : {mdot_fuel2:.4f} kg/s")
 print(f"Vitesse d'éjection u4 : {u4:.1f} m/s")
 print("-" * 45)
 print(f"Section de Capture (Acap) : {A_cap:.3f} m²")
