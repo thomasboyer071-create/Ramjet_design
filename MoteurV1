@@ -139,6 +139,8 @@ p01 = p1_amb * (1 + (gamma_air-1)/2 * m1_vol**2)**(gamma_air/(gamma_air-1))
 p02 = p01 * eta_diff
 t02 = t01 
 
+print(f"Conditions entrée diffuseur : T={t1_amb:.1f} K | P={p1_amb/1e5:.2f} bar | Mach={m1_vol:.3f}")
+print(f"Température totale dans le diffuseur (t01) : {t01:.1f} K")
 # 2.1 Diffuseur subsonic
 
 # 3. Combustion (Rayleigh + Cantera)
@@ -147,6 +149,8 @@ gas.set_equivalence_ratio(phi, fuel=fuel_name, oxidizer=oxidizer)
 t2_stat = t02 / (1 + (gamma_air-1)/2 * m2_in**2)
 p2_stat = p02 / (1 + (gamma_air-1)/2 * m2_in**2)**(gamma_air/(gamma_air-1))
 gas.TP = t2_stat, p2_stat
+
+print(f"Conditions entrée chambre : T={gas.T:.1f} K | P={gas.P/1e5:.2f} bar | Mach={m2_in:.3f}")
 
 cp_in = gas.cp_mass
 gamma_in = gas.cp_mass / gas.cv_mass

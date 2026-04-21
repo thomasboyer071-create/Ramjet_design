@@ -11,6 +11,7 @@ except:
 
 # Paramètres d'entrée (identiques à ton MATLAB)
 T01 = 532.5       # Température totale entrée (K)
+T1=523.1        # Température statique entrée (K)
 LHV = 44.1e6      # LHV n-dodecane (J/kg)
 eta_comb = 1.0    # Rendement
 fuel_species = 'c12h26'
@@ -26,14 +27,14 @@ f_st = y_fuel_st / (1.0 - y_fuel_st)
 print(f"fst détecté : {f_st:.5f}")
 
 # --- 2. PRÉPARATION DES DONNÉES ---
-phis = np.linspace(0.1, 1.5, 50) # On reste proche de la zone utile (0.1 à 1.5)
+phis = np.linspace(0.1, 1.5, 20) # On reste proche de la zone utile (0.1 à 1.5)
 T_cantera = []
 T_rayleigh = []
 
 for phi in phis:
     # A. CALCUL CANTERA (Réalité avec dissociation)
     gas.set_equivalence_ratio(phi, fuel=fuel_species, oxidizer=oxidizer_mix)
-    gas.TP = T01, ct.one_atm
+    gas.TP = T1, ct.one_atm
     
     # On récupère le Cp moyen spécifique à ce phi pour être le plus juste possible
     cp_in = gas.cp_mass
@@ -44,7 +45,8 @@ for phi in phis:
     
     # B. CALCUL RAYLEIGH (Modèle analytique linéaire)
     f = phi * f_st
-    q = (f / (1 + f)) * LHV * eta_comb
+    f_burned = min(f, f_st)              # ← ligne manquante dans votre code
+    q = (f_burned / (1 + f)) * LHV * eta_comb
     # T02 = T01 + q / Cp
     t02_ray = T01 + (q / cp_mean_local)
     T_rayleigh.append(t02_ray)
