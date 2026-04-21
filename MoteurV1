@@ -15,6 +15,8 @@ f_target = 10000       # Poussée cible [N]
 
 # Paramètres du Diffuseur
 me_diff_target = 0.8   # Mach cible avant le choc droit
+Mn_cible = 1.356        # Mach normal cible pour les chocs obliques (pour respecter Oswatitsch)
+Mn_cible=1.296936
 n_rampes = 3           # Nombre de chocs obliques
 gamma_air = 1.4        # Gamma air frais
 
@@ -44,62 +46,72 @@ def oblique_shock_wave(m1, m1n, g):
     m2 = m2n / np.sin(beta - theta)
     return beta, theta, m2n, m2
 
-#def calculer_geo_diffuseur(m1, me, n_chocs, g):
-#    m_target_oblique = np.sqrt(((me**2)+(2/(g-1)))/(2*g/(g-1)*(me**2)-1))
-#    k, m_last = 1.0, 2.0
-#    temp_thetas = np.zeros(n_chocs)
-#    while abs(m_target_oblique - m_last) > 0.001 and k > 0.3:
-#        m1n_test = m_target_oblique / k
-#        if m1n_test >= m1 or m1n_test <= 1: break
-#        m_current = m1
-#        for nn in range(n_chocs):
-#            _, th, _, m2_next = oblique_shock_wave(m_current, m1n_test, g)
-#            temp_thetas[nn] = th
-#            m_current = m2_next
-#        m_last = m_current
-#        k -= 0.0001
-#    if k <= 0.3: return None, None
-#    r_tp_oblique = (((((g+1)/2)*m1n_test**2)/(1+((g-1)/2)*m1n_test**2))**(g/(g-1))) /((2*g/(g+1)*(m1n_test**2)-((g-1)/(g+1)))**(1/(g-1)))
-#    r_tp_normal = (((((g+1)/2)*m_target_oblique**2)/(1+((g-1)/2)*m_target_oblique**2))**(g/(g-1)))/((2*g/(g+1)*(m_target_oblique**2)-((g-1)/(g+1)))**(1/(g-1)))
-#    return np.degrees(temp_thetas), (r_tp_oblique**n_chocs) * r_tp_normal
-#
+def oblique_shock_wave(M1, M1n, g):
+    """
+    Calcule les propriétés d'un choc oblique à partir du Mach normal amont.
+    """
+    # Angle de choc (beta)
+    beta = np.arcsin(M1n / M1)
+    
+    # Angle de déviation (theta)
+    tan_theta = (2 * (1 / np.tan(beta)) * (M1**2 * np.sin(beta)**2 - 1) / 
+                 (M1**2 * (g + np.cos(2 * beta)) + 2))
+    theta = np.arctan(tan_theta)
+    
+    # Mach normal aval (M2n)
+    m2n_sq = (M1n**2 + 2/(g-1)) / (2*g/(g-1)*M1n**2 - 1)
+    M2n = np.sqrt(m2n_sq)
+    
+    # Mach réel aval (M2)
+    M2 = M2n / np.sin(beta - theta)
+    
+    return beta, theta, M2n, M2
 
-def calculer_geo_diffuseur(m1, me, n_chocs, g):
-    # Calcul du Mach cible après les chocs obliques (avant le choc droit)
-    m_target_oblique = np.sqrt(((me**2)+(2/(g-1)))/(2*g/(g-1)*(me**2)-1))
+def calculer_geo_diffuseur(M1, Mn, n_chocs, g=1.4):
+    """
+    Calcule la géométrie et le rendement du diffuseur.
+    """
+    # M_target_oblique : Mach avant le choc droit (condition d'Oswatitsch)
+    # On utilise la relation du choc droit inverse
     
-    k, m_last = 1.0, 2.0
+    M1n_test = Mn
+    M_current = M1
+    
     temp_thetas = np.zeros(n_chocs)
-    temp_betas = np.zeros(n_chocs) # Ajout pour stocker les betas
+    temp_betas = np.zeros(n_chocs)
     
-    while abs(m_target_oblique - m_last) > 0.001 and k > 0.3:
-        m1n_test = m_target_oblique / k
-        if m1n_test >= m1 or m1n_test <= 1: 
-            break
-            
-        m_current = m1
-        for nn in range(n_chocs):
-            # On récupère beta et theta de la fonction oblique_shock_wave
-            beta, th, _, m2_next = oblique_shock_wave(m_current, m1n_test, g)
-            temp_thetas[nn] = th
-            temp_betas[nn] = beta # Stockage du beta local
-            m_current = m2_next
-            
-        m_last = m_current
-        k -= 0.0001
-        
-    if k <= 0.3: 
-        return None, None, None
-        
-    # Calcul des rendements de pression génératrice
-    r_tp_oblique = (((((g+1)/2)*m1n_test**2)/(1+((g-1)/2)*m1n_test**2))**(g/(g-1))) / \
-                   ((2*g/(g+1)*(m1n_test**2)-((g-1)/(g+1)))**(1/(g-1)))
+    # Calcul itératif sur le nombre de chocs
+    for nn in range(n_chocs):
+        bt, th, _, M2 = oblique_shock_wave(M_current, M1n_test, g)
+        temp_thetas[nn] = th
+        temp_betas[nn] = bt
+        M_current = M2
     
-    r_tp_normal = (((((g+1)/2)*m_target_oblique**2)/(1+((g-1)/2)*m_target_oblique**2))**(g/(g-1))) / \
-                  ((2*g/(g+1)*(m_target_oblique**2)-((g-1)/(g+1)))**(1/(g-1)))
-                  
-    # On retourne les angles en degrés pour les thétas, et en radians pour les bétas (plus simple pour le plot)
-    return np.degrees(temp_thetas), temp_betas, (r_tp_oblique**n_chocs) * r_tp_normal
+    M_last = M_current
+    
+    # Conversion en degrés
+    thetas = np.degrees(temp_thetas)
+    betas = np.degrees(temp_betas)
+    
+    # Fonction locale pour le rapport de pression totale (Pi2/Pi1)
+    def ratio_pression_totale(Mn, gamma):
+        num = (((gamma + 1) / 2) * Mn**2) / (1 + ((gamma - 1) / 2) * Mn**2)
+        den = (2 * gamma / (gamma + 1)) * Mn**2 - ((gamma - 1) / (gamma + 1))
+        return (num**(gamma / (gamma - 1))) / (den**(1 / (gamma - 1)))
+
+    # Calcul des rendements
+    r_tp_oblique = ratio_pression_totale(M1n_test, g)
+    r_tp_normal = ratio_pression_totale(M_last, g)
+    
+    # Mach final après le choc droit final
+    Mf = np.sqrt(((M_last**2) + (2/(g-1))) / (2*g/(g-1)*(M_last**2) - 1))
+    
+    # Rendement global (Oswatitsch)
+    rendement = (r_tp_oblique**n_chocs) * r_tp_normal
+    
+    return thetas, betas, rendement, Mf
+
+
 
 
 def get_atmos_isa(h):
@@ -133,7 +145,7 @@ rho1_amb = p1_amb / (r_air * t1_amb)
 u1_vol = m1_vol * np.sqrt(gamma_air * r_air * t1_amb)
 
 # 2. Diffuseur supersonic 
-thetas, betas, eta_diff = calculer_geo_diffuseur(m1_vol, me_diff_target, n_rampes, gamma_air)
+thetas, betas, eta_diff, Mf = calculer_geo_diffuseur(m1_vol, Mn_cible, n_rampes, gamma_air)
 t01 = t1_amb * (1 + (gamma_air-1)/2 * m1_vol**2)
 p01 = p1_amb * (1 + (gamma_air-1)/2 * m1_vol**2)**(gamma_air/(gamma_air-1))
 p02 = p01 * eta_diff
@@ -191,8 +203,8 @@ mdot_fuel = f_ratio * mdot_air
 
 
 
-mdot_air2=f_target/((1+f_ratio)*u4-u1_vol)
-mdot_fuel2=mdot_air2*f_ratio
+mdot_air=f_target/((1+f_ratio)*u4-u1_vol)
+mdot_fuel=mdot_air*f_ratio
 # 5. Dimensions
 # On suppose que les onde de chocs se joingne toute sur la ligne de capture (x_lip, y_lip) = (0.0, 1.0)
 # Wcap=W1=W2 
@@ -203,11 +215,11 @@ def flow_fonction(m, g, R):
 # Section de capture Acap
 
 A_cap= mdot_air*np.sqrt(t01)/(p01 * flow_fonction(m1_vol, gamma_air, r_air))
-A1= mdot_air*np.sqrt(t01)/(p02 * flow_fonction(me_diff_target, gamma_air, r_air))
+A1= mdot_air*np.sqrt(t01)/(p02 * flow_fonction(Mf, gamma_air, r_air))
 A2= mdot_air*np.sqrt(t02)/(p02 * flow_fonction(m2_in, gamma_air, r_air))
 
 exponent = (gamma_air + 1) / (2 * (gamma_air - 1))
-a1_astar = (1 / me_diff_target) * ((2 / (gamma_air + 1)) * (1 + (gamma_air - 1) / 2 * me_diff_target**2))**exponent
+a1_astar = (1 / Mf) * ((2 / (gamma_air + 1)) * (1 + (gamma_air - 1) / 2 * Mf**2))**exponent
 a2_astar = (1 / m2_in) * ((2 / (gamma_air + 1)) * (1 + (gamma_air - 1) / 2 * m2_in**2))**exponent
 
 A2_A1=a2_astar / a1_astar
@@ -235,7 +247,7 @@ print(f"Mach sortie foyer (m3) : {m3:.3f}")
 print(f"Perte p0 combustion : {100*(1-p03/p02):.1f} %")
 print(f"gamma gaz (g_out) : {gamma_out:.3f}")
 print(f"Débit d'air : {mdot_air:.2f} kg/s | Débit fuel : {mdot_fuel:.4f} kg/s")
-print(f"Débit d'air : {mdot_air2:.2f} kg/s | Débit fuel : {mdot_fuel2:.4f} kg/s")
+#print(f"Débit d'air : {mdot_air2:.2f} kg/s | Débit fuel : {mdot_fuel2:.4f} kg/s")
 print(f"Vitesse d'éjection u4 : {u4:.1f} m/s")
 print("-" * 45)
 print(f"Section de Capture (Acap) : {A_cap:.3f} m²")
@@ -273,7 +285,7 @@ for i, th in enumerate(thetas):
 
 print(f"\n--- ANGLES DES CHOCS (Vérification) ---")
 for i, b in enumerate(betas):
-    print(f"Angle Choc {i+1} (Beta local) : {np.degrees(b):.3f}°")
+    print(f"Angle Choc {i+1} (Beta local) : {b:.3f}°")
 
 print("-" * 60)
 

@@ -2,6 +2,7 @@ import cantera as ct
 import numpy as np
 import matplotlib.pyplot as plt
 import os
+import scipy.optimize as opt
 
 # --- CONFIGURATION ---
 try:
@@ -14,6 +15,7 @@ T01 = 532.5       # Température totale entrée (K)
 T1=523.1        # Température statique entrée (K)
 LHV = 44.1e6      # LHV n-dodecane (J/kg)
 eta_comb = 1.0    # Rendement
+m2_in=0.3
 fuel_species = 'c12h26'
 oxidizer_mix = {'O2': 1.0, 'N2': 3.76}
 
@@ -27,7 +29,7 @@ f_st = y_fuel_st / (1.0 - y_fuel_st)
 print(f"fst détecté : {f_st:.5f}")
 
 # --- 2. PRÉPARATION DES DONNÉES ---
-phis = np.linspace(0.1, 1.5, 20) # On reste proche de la zone utile (0.1 à 1.5)
+phis = np.linspace(0.2, 1.5, 20) # On reste proche de la zone utile (0.1 à 1.5)
 T_cantera = []
 T_rayleigh = []
 
@@ -49,7 +51,14 @@ for phi in phis:
     q = (f_burned / (1 + f)) * LHV * eta_comb
     # T02 = T01 + q / Cp
     t02_ray = T01 + (q / cp_mean_local)
-    T_rayleigh.append(t02_ray)
+    gamma_mean=1.31
+    def rayleigh_solve(m):
+        ratio_target = T01 / t02_ray
+        return ((m2_in/m)**2 * ((1 + gamma_mean*m**2)/(1 + gamma_mean*m2_in**2))**2 * (1 + (gamma_mean-1)/2 * m**2) / (1 + (gamma_mean-1)/2 * m2_in**2)) - ratio_target
+
+    m3 = opt.fsolve(rayleigh_solve, 0.5)[0]
+    T2=t02_ray /(1 + (gamma_mean-1)/2 * m3**2)
+    T_rayleigh.append(T2)
 
 # --- 3. GRAPHIQUE COMPARATIF ---
 plt.figure(figsize=(10, 7))
