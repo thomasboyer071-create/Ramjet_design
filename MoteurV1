@@ -3,6 +3,7 @@ import numpy as np
 import scipy.optimize as opt
 import matplotlib.pyplot as plt
 import os
+from aeromoc.nozzle import NozzleDesign
 
 # =============================================================================
 # --- PARAMÈTRES D'ENTRÉE (USER INPUTS) ---
@@ -234,6 +235,12 @@ a4 = (a_col/m4) * ((2/(gamma_out+1))*(1+(gamma_out-1)/2*m4**2))**((gamma_out+1)/
 isp = f_target / (mdot_fuel * g0)
 cs = (mdot_fuel / f_target) * 3600
 eta_thermo = (f_target * u1_vol) / (mdot_fuel * lhv_fuel)
+
+#Conception tuyere
+nz = NozzleDesign('idealAsym', pt=p03, tt=t03, patm=p1_amb, asym=0.7, rup=3., rlow=3.)
+nz.solve()
+
+
 
 # =============================================================================
 # --- AFFICHAGE DES RÉSULTATS ---
