@@ -87,6 +87,7 @@ lhv_fuel=43.4e6
 eta_comb=0.98
 a_col=0.15719
 a4=0.46864
+g_acc = 9.80665
 
 
 mech_file = 'nDodecane_Reitz.yaml'
@@ -106,7 +107,11 @@ ETA_grid = np.zeros_like(MACH)
 
 THRUST_grid = np.zeros_like(MACH)
 M4_grid = np.zeros_like(MACH)
+M3_grid = np.zeros_like(MACH)
 M2_grid = np.zeros_like(MACH)
+ISP_grid = np.zeros_like(MACH)
+CS_grid = np.zeros_like(MACH)
+eta_thermo_grid = np.zeros_like(MACH)
 
 # --- BOUCLE DE CALCUL ---
 for i in range(len(h_range)):
@@ -167,15 +172,6 @@ for i in range(len(h_range)):
         t02_local = t02
 
 
-        print(f"\n{'='*20} 4. CONDITION d'ETUDE {'='*20}")
-        print(f"Altitude : {h_range[i]/1000:.1f} km | Mach : {M_inf:.2f}")
-        print(f"\n{'='*20} 4. DIFFUSEUR {'='*20}")
-        print(f"Mach à l'entrée du diffuseur (M_lip) : {M_lip:.3f}")
-        print(f"Rapport de pression totale à la sortie du diffuseur (p02/p01) : {p02/p01:.3f}")
-        print(f"Débit massique capturé (mdot) : {mdot_local:.2f} kg/s")
-        if M_inf > M_design:
-            print(f"Mach choc avalé (M_shock) : {M_shock:.3f} (si supercritique)")
-        print(f"Rendement du diffuseur (η) : {eta_total*100:.2f} %")
 
         # Résolution de M2 à partir de A_chambre fixe
         m2_in = solve_mach_from_area(A_chambre, mdot_local, p02_local, t02_local, gamma)
@@ -220,15 +216,9 @@ for i in range(len(h_range)):
             return ((m2_in/m)**2 * ((1 + gamma_mean*m**2)/(1 + gamma_mean*m2_in**2))**2 * (1 + (gamma_mean-1)/2 * m**2) / (1 + (gamma_mean-1)/2 * m2_in**2)) - ratio_target
         m3 = fsolve(rayleigh_solve, 0.5)[0]
         t2_rayleigh = t03 / (1 + (gamma_mean-1)/2 * m3**2)
-
+        M3_grid[i, j] = m3
         p3_stat = p2_stat * (1 + gamma_mean * m2_in**2) / (1 + gamma_mean * m3**2)
         p03 = p3_stat * (1 + (gamma_out-1)/2 * m3**2)**(gamma_out/(gamma_out-1))
-        print(f"\n{'='*20} 4. CHAMBRE DE COMBUSTION {'='*20}")
-        print(f"Mach entrée chambre (M2) : {m2_in:.3f}")
-        print(f"Mach sortie chambre (M3) : {m3:.3f}")
-        print(f"Conditions entrée chambre  : T={gas.T:.1f} K | P={gas.P/1e5:.2f} bar | gamma={gamma_in:.2f}")
-        print(f"Conditions sortie chambre : T={t2_rayleigh:.1f} K | P={p03/1e5:.2f} bar | gamma={gamma_out:.2f}")
-        print(f"Rapport de pression totale (p03/p02) : {p03/p02:.3f}")
 
 
         # =============================================================================
@@ -260,7 +250,23 @@ for i in range(len(h_range)):
 
         # 4. Vérification de l'adaptation (P4 vs P1)
         p4_stat = p03 / (1 + (gamma_out-1)/2 * m4**2)**(gamma_out/(gamma_out-1))
+        
+        print(f"\n{'='*20} 4. CONDITION d'ETUDE {'='*20}")
+        print(f"Altitude : {h_range[i]/1000:.1f} km | Mach : {M_inf:.2f}")
+        print(f"\n{'='*20} 4. DIFFUSEUR {'='*20}")
+        print(f"Mach à l'entrée du diffuseur (M_lip) : {M_lip:.3f}")
+        print(f"Rapport de pression totale à la sortie du diffuseur (p02/p01) : {p02/p01:.3f}")
+        print(f"Débit massique capturé (mdot) : {mdot_local:.2f} kg/s")
+        if M_inf > M_design:
+            print(f"Mach choc avalé (M_shock) : {M_shock:.3f} (si supercritique)")
+        print(f"Rendement du diffuseur (η) : {eta_total*100:.2f} %")
 
+        print(f"\n{'='*20} 4. CHAMBRE DE COMBUSTION {'='*20}")
+        print(f"Mach entrée chambre (M2) : {m2_in:.3f}")
+        print(f"Mach sortie chambre (M3) : {m3:.3f}")
+        print(f"Conditions entrée chambre  : T={gas.T:.1f} K | P={gas.P/1e5:.2f} bar | gamma={gamma_in:.2f}")
+        print(f"Conditions sortie chambre : T={t2_rayleigh:.1f} K | P={p03/1e5:.2f} bar | gamma={gamma_out:.2f}")
+        print(f"Rapport de pression totale (p03/p02) : {p03/p02:.3f}")
         # Affichage pour vérification
         print(f"\n{'='*20} 4. TUYÈRE & PERFORMANCE {'='*20}")
         print(f"Mach de sortie (M4) : {m4:.3f}")
@@ -270,11 +276,16 @@ for i in range(len(h_range)):
 
         thrust = (mdot_total * u4) - (mdot_air * u1_vol) + a4 * (p4_stat - p1)
         THRUST_grid[i, j] = max(0, thrust)
+        ISP_grid[i, j] = thrust / (mdot_fuel * g_acc) if mdot_fuel > 0 else 0
+        CS_grid[i, j] = thrust / mdot_fuel if mdot_fuel > 0 else 0
+        eta_thermo_grid[i, j] = (thrust * u1_vol) / (mdot_fuel * lhv_fuel) if mdot_fuel > 0 else 0
+
         print(f"Poussée calculée : {thrust:.1f} N")
+        print(f"ISP calculé : {ISP_grid[i, j]:.1f} s")
         print("=" * 60)
 
 
-
+#Surface de poussée
 
 idx_m = np.argmin(np.abs(m_range - 2.7))
 idx_h = np.argmin(np.abs(h_range - 18000))
@@ -292,7 +303,51 @@ ax.set_zlabel('Poussée F (N)')
 ax.legend()
 fig.colorbar(surf, ax=ax, shrink=0.5, aspect=5)
 
+# Surface de Mach de sortie M3 de la chambre de combustion
 
+fig = plt.figure(figsize=(12, 8))
+ax = fig.add_subplot(111, projection='3d')
+surf = ax.plot_surface(MACH, ALT/1000, M3_grid, cmap='viridis', edgecolor='none', alpha=0.8)
+ax.set_title('Mach de sortie M3 de la chambre de combustion')
+ax.set_xlabel('Mach de vol')
+ax.set_ylabel('Altitude (km)')
+ax.set_zlabel('Mach de sortie M3')
+ax.legend()
+fig.colorbar(surf, ax=ax, shrink=0.5, aspect=5)
+
+# Surface de ISP du moteur
+
+fig = plt.figure(figsize=(12, 8))
+ax = fig.add_subplot(111, projection='3d')
+surf = ax.plot_surface(MACH, ALT/1000, ISP_grid, cmap='viridis', edgecolor='none', alpha=0.8)
+ax.set_title('ISP du moteur')
+ax.set_xlabel('Mach de vol')
+ax.set_ylabel('Altitude (km)')
+ax.set_zlabel('ISP')
+ax.legend()
+fig.colorbar(surf, ax=ax, shrink=0.5, aspect=5)
+
+#Surface de CS du moteur
+fig = plt.figure(figsize=(12, 8))
+ax = fig.add_subplot(111, projection='3d')
+surf = ax.plot_surface(MACH, ALT/1000, CS_grid, cmap='viridis', edgecolor='none', alpha=0.8)
+ax.set_title('CS du moteur')
+ax.set_xlabel('Mach de vol')
+ax.set_ylabel('Altitude (km)')
+ax.set_zlabel('CS (N/kg/s)')
+ax.legend()
+fig.colorbar(surf, ax=ax, shrink=0.5, aspect=5) 
+
+#Surface de rendement thermo du moteur
+fig = plt.figure(figsize=(12, 8))
+ax = fig.add_subplot(111, projection='3d')
+surf = ax.plot_surface(MACH, ALT/1000, eta_thermo_grid*100, cmap='viridis', edgecolor='none', alpha=0.8)
+ax.set_title('Rendement Thermodynamique du moteur')
+ax.set_xlabel('Mach de vol')
+ax.set_ylabel('Altitude (km)')
+ax.set_zlabel('Rendement Thermodynamique (%)')
+ax.legend()
+fig.colorbar(surf, ax=ax, shrink=0.5, aspect=5)
 
 
 # =============================================================================
