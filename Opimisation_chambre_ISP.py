@@ -11,7 +11,7 @@ H_ALT = 18000
 M1_VOL = 2.7
 F_TARGET = 10000
 ETA_COMB = 0.98
-LHV_FUEL = 43.6e6
+LHV_FUEL = 43.4e6
 MECH_FILE = 'nDodecane_Reitz.yaml'
 FUEL_NAME = 'c12h26'
 OXIDIZER = {'O2': 1.0, 'N2': 3.76}
@@ -28,7 +28,7 @@ def calculate_isp(phi, m2_in):
         P1 = 7504.8
         a1 = np.sqrt(1.4 * 287 * T1)
         u1 = M1_VOL * a1
-        eta_diff = 0.85 
+        eta_diff = 0.8685  # Rendement du diffuseur (peut être ajusté ou calculé plus précisément)
         F_target = F_TARGET  # Force cible en Newtons
         
         T02 = T1 * (1 + 0.2 * M1_VOL**2)
@@ -70,7 +70,7 @@ def calculate_isp(phi, m2_in):
         
         # Si le rapport requis est > 1, c'est le blocage thermique
         if t03_t0star_requis > 1.0:
-            return np.nan
+            return np.nan,np.nan
 
         # 4. RÉSOLUTION M3
         def rayleigh_min(M):
@@ -84,14 +84,18 @@ def calculate_isp(phi, m2_in):
         p3_st = (P02 / (1 + 0.2 * m2_in**2)**3.5) * (1 + gamma_mean*m2_in**2) / (1 + gamma_mean*m3**2)
         p03 = p3_st * (1 + (gamma_out-1)/2 * m3**2)**(gamma_out/(gamma_out-1))
         
-        if p03 < P1: return np.nan # Pression insuffisante
+        if p03 < P1: return np.nan,np.nan # Pression insuffisante
         
         m4 = np.sqrt((2/(gamma_out-1)) * ((p03/P1)**((gamma_out-1)/gamma_out) - 1))
         u4 = m4 * np.sqrt(gamma_out * R_gaz * (T03 / (1 + (gamma_out-1)/2 * m4**2)))
-        
-        return F_target / ((f * (F_target/(u4 - u1))) * G0)
+        mdot_air=F_target/((1+f)*u4-u1)
+        mdot_fuel=mdot_air*f
+        print(f"mdot_air: {mdot_air:.4f} kg/s, mdot_fuel: {mdot_fuel:.4f} kg/s")
+        ISP = F_target / ((f * (F_target/(u4 - u1))) * G0)
+        cs = (mdot_fuel / F_target) * 3600
+        return ISP , cs
     except:
-        return np.nan
+        return np.nan, np.nan
 
 # =============================================================================
 # --- CRÉATION DE LA GRILLE ET CALCUL ---
@@ -104,11 +108,14 @@ m2_range = np.linspace(0.1, 0.6, n_points)
 
 PHI, M2 = np.meshgrid(phi_range, m2_range)
 ISP = np.zeros_like(PHI)
+CS = np.zeros_like(PHI)
+
 
 print("Calcul de la surface Isp (cela peut prendre quelques secondes)...")
 for i in range(n_points):
     for j in range(n_points):
-        ISP[i, j] = calculate_isp(PHI[i, j], M2[i, j])
+        ISP[i, j], CS[i, j] = calculate_isp(PHI[i, j], M2[i, j])
+        print(f"Calculé: phi={PHI[i, j]:.3f}, M2={M2[i, j]:.3f} => Isp={ISP[i, j]:.2f} s, CS={CS[i, j]:.4f} kg/h/N")
 
 # =============================================================================
 # --- GRAPHIQUE 3D ---
@@ -124,6 +131,20 @@ ax.set_xlabel(r'Richesse $\phi$')
 ax.set_ylabel(r'Mach entrée chambre $M_2$')
 ax.set_zlabel(r'Isp (s)')
 plt.title(f'Isp du Ramjet à M={M1_VOL} (Altitude {H_ALT}m)\nZones vides = Blocage Thermique')
+
+fig.colorbar(surf, shrink=0.5, aspect=5)
+plt.show()
+
+fig = plt.figure(figsize=(12, 8))
+ax = fig.add_subplot(111, projection='3d')
+
+# On masque les valeurs NaN pour ne pas afficher la zone de blocage
+surf = ax.plot_surface(PHI, M2, CS, cmap=cm.viridis, linewidth=0, antialiased=True, alpha=0.9)
+
+ax.set_xlabel(r'Richesse $\phi$')
+ax.set_ylabel(r'Mach entrée chambre $M_2$')
+ax.set_zlabel(r'Consommation spécifique (kg/s)')
+plt.title(f'Consommation spécifique du Ramjet à M={M1_VOL} (Altitude {H_ALT}m)\nZones vides = Blocage Thermique')
 
 fig.colorbar(surf, shrink=0.5, aspect=5)
 plt.show()

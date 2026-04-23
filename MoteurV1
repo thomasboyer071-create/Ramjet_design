@@ -147,13 +147,12 @@ u1_vol = m1_vol * np.sqrt(gamma_air * r_air * t1_amb)
 
 # 2. Diffuseur supersonic 
 thetas, betas, eta_diff, Mf = calculer_geo_diffuseur(m1_vol, Mn_cible, n_rampes, gamma_air)
+print(Mf)
 t01 = t1_amb * (1 + (gamma_air-1)/2 * m1_vol**2)
 p01 = p1_amb * (1 + (gamma_air-1)/2 * m1_vol**2)**(gamma_air/(gamma_air-1))
 p02 = p01 * eta_diff
 t02 = t01 
 
-print(f"Conditions entrée diffuseur : T={t1_amb:.1f} K | P={p1_amb/1e5:.2f} bar | Mach={m1_vol:.3f}")
-print(f"Température totale dans le diffuseur (t01) : {t01:.1f} K")
 # 2.1 Diffuseur subsonic
 
 # 3. Combustion (Rayleigh + Cantera)
@@ -163,7 +162,6 @@ t2_stat = t02 / (1 + (gamma_air-1)/2 * m2_in**2)
 p2_stat = p02 / (1 + (gamma_air-1)/2 * m2_in**2)**(gamma_air/(gamma_air-1))
 gas.TP = t2_stat, p2_stat
 
-print(f"Conditions entrée chambre : T={gas.T:.1f} K | P={gas.P/1e5:.2f} bar | Mach={m2_in:.3f}")
 
 cp_in = gas.cp_mass
 gamma_in = gas.cp_mass / gas.cv_mass
@@ -219,12 +217,14 @@ A_cap= mdot_air*np.sqrt(t01)/(p01 * flow_fonction(m1_vol, gamma_air, r_air))
 A1= mdot_air*np.sqrt(t01)/(p02 * flow_fonction(Mf, gamma_air, r_air))
 A2= mdot_air*np.sqrt(t02)/(p02 * flow_fonction(m2_in, gamma_air, r_air))
 
+L_chmabre=mdot_air / (gas.density * m2_in * np.sqrt(gamma_air * r_air * t2_stat))
+
 exponent = (gamma_air + 1) / (2 * (gamma_air - 1))
 a1_astar = (1 / Mf) * ((2 / (gamma_air + 1)) * (1 + (gamma_air - 1) / 2 * Mf**2))**exponent
 a2_astar = (1 / m2_in) * ((2 / (gamma_air + 1)) * (1 + (gamma_air - 1) / 2 * m2_in**2))**exponent
 
 A2_A1=a2_astar / a1_astar
-#print(f"Ratio A2/A1 : {A2_A1:.3f}")
+
 #print(f"Ratio A2/A1 : {A2/A1:.3f}")
 
 
@@ -237,8 +237,8 @@ cs = (mdot_fuel / f_target) * 3600
 eta_thermo = (f_target * u1_vol) / (mdot_fuel * lhv_fuel)
 
 #Conception tuyere
-nz = NozzleDesign('idealAsym', pt=p03, tt=t03, patm=p1_amb, asym=0.7, rup=3., rlow=3.)
-nz.solve()
+#nz = NozzleDesign('idealAsym', pt=p03, tt=t03, patm=p1_amb, asym=0.7, rup=3., rlow=3.)
+#nz.solve()
 
 
 
@@ -247,28 +247,60 @@ nz.solve()
 # =============================================================================
 
 print(f"--- RÉSULTATS RAMJET (M={m1_vol} @ {h_alt}m) ---")
+print(f"Conditions atmosphériques : T={t1_amb:.1f} K | P={p1_amb/1e5:.2f} bar | rho={rho1_amb:.3f} kg/m³ | a={np.sqrt(gamma_air * r_air * t1_amb):.1f} m/s")
+print(f"Vitesse de vol (u1) : {u1_vol:.1f} m/s")
 print(f"Angles diffuseur : {thetas} °")
+print(f"Angles chocs : {betas} °")
+print(f"Mach final avant choc droit : {Mf:.3f}")
+print(f"Pression totale entrée diffuseur (p01) : {p01/1e5:.3f} bar")
+print(f"Pression totale sortie diffuseur (p02) : {p02/1e5:.3f} bar")
 print(f"Rendement diffuseur (p02/p01) : {eta_diff:.4f}")
-print(f"Température sortie foyer (t03) : {t03:.1f} K")
+print(f"Section de Capture (Acap) : {A_cap:.3f} m²")
+print(f"Section levre diffuseur (A1) : {A1:.3f} m²")
+print(f"Section sortie diffuseur (A2) : {A2:.3f} m²")
+print(f"Rapport de section (A2/A1) : {A2/A1:.3f}")
+
+print(f"\n{'='*20} 2. CHAMBRE DE COMBUSTION {'='*20}")
+print(f"Richesse (phi) : {phi:.2f} | LHV fuel : {lhv_fuel/1e6:.2f} MJ/kg | Rendement combustion : {eta_comb*100:.2f} %")
+print(f"Température totale entrée chambre (t02) : {t02:.1f} K")
+print(f'Température statique entrée chambre (t2) : {t2_stat:.1f} K')
+print(f"Température totale sortie foyer (t03) : {t03:.1f} K")
+print(f'Température statique sortie foyer (t3) : {t03 / (1 + (gamma_out-1)/2 * m3**2):.1f} K')
+print(f"Mach entrée chambre (m2) : {m2_in:.3f}")
 print(f"Mach sortie foyer (m3) : {m3:.3f}")
+print(f"Pression totale entrée chambre (p02) : {p02/1e5:.3f} bar")
+print(f'Pression statique entrée chambre (p2) : {p2_stat/1e5:.3f} bar')
+print(f"Pression totale sortie foyer (p03) : {p03/1e5:.3f} bar")
+print(f'Pression statique sortie foyer (p3) : {p3_stat/1e5:.3f} bar')
 print(f"Perte p0 combustion : {100*(1-p03/p02):.1f} %")
+print(f'ratio de pression totale (p03/p02) : {p03/p02:.3f}')
+print(f"Section entrée chambre de combustion (A2) : {A2:.3f} m²")
+print(f"Longueur de la chambre (L) : {L_chmabre:.3f} m")
+
+print(f"\n{'='*20} 3. PARAMÈTRES DES GAZ {'='*20}")
+print(f"masse volumique air (rho) : {gas.density:.3f} kg/m³")
 print(f"gamma gaz (g_out) : {gamma_out:.3f}")
+print(f"gamma gaz (g_in) : {gamma_in:.3f}")
+print(f"gamma gaz (g_mean) : {gamma_mean:.3f}")
+print(f"Cp gaz (cp_out) : {cp_out:.1f} J/kg/K")
+print(f"Cp gaz (cp_in) : {cp_in:.1f} J/kg/K")
+print(f"Cp gaz (cp_mean) : {cp_mean:.1f} J/kg/K")
 print(f"Débit d'air : {mdot_air:.2f} kg/s | Débit fuel : {mdot_fuel:.4f} kg/s")
-#print(f"Débit d'air : {mdot_air2:.2f} kg/s | Débit fuel : {mdot_fuel2:.4f} kg/s")
-print(f"Pression total tuyère : {p03:.5f} Pa")
-print(f"gamma out : {gamma_out:.3f} ")
+
+print(f"\n{'='*20} 4. PARAMÈTRES DU TUYÈRE {'='*20}")
+
+print(f"Pression totale tuyère : {p03:.5f} Pa")
 print(f"Pression de sortie de tuyère (p4) : {p4/1e5:.3f} bar")
 print(f"Mach de sortie de tuyère (M4) : {m4:.3f}")
 print(f"Vitesse d'éjection u4 : {u4:.1f} m/s")
-print("-" * 45)
-print(f"Section de Capture (Acap) : {A_cap:.3f} m²")
-print(f"Section levre diffuseur (A1) : {A1:.3f} m²")
-print(f"Section entrée chambre de combustion (A2) : {A2:.3f} m²")
-print(f"Section col tuyere (Acol) : {a_col:.5f} m²")
-print(f"Section de sortie (A4)  : {a4:.5f} m²")
-print(f"Rapport Section de sortie (A4)  : {a4/a_col:.5f}")
-print(f"Rapport section tuyere  : {a4/a_col:.3f}")
-print("-" * 45)
+print(f"Débit massique total (mdot) : {mdot_air + mdot_fuel:.3f} kg/s")
+print(f"Section de col (a_col) : {a_col:.5f} m²")
+print(f"Section de sortie (a4) : {a4:.5f} m²")
+print(f"Rapport de section (a4/a_col) : {a4/a_col:.3f}")
+
+
+
+print(f"\n{'='*20} 5. RÉSULTATS DE PERFORMANCE {'='*20}")
 print(f"Impulsion Spécifique (isp)    : {isp:.1f} s")
 print(f"Consommation Spécifique (cs) : {cs:.6f} kg/h/N")
 print(f"Efficacité Thermodynamique (η): {eta_thermo*100:.2f} %")
