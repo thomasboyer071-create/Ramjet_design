@@ -147,12 +147,13 @@ u1_vol = m1_vol * np.sqrt(gamma_air * r_air * t1_amb)
 
 # 2. Diffuseur supersonic 
 thetas, betas, eta_diff, Mf = calculer_geo_diffuseur(m1_vol, Mn_cible, n_rampes, gamma_air)
-print(Mf)
+
 t01 = t1_amb * (1 + (gamma_air-1)/2 * m1_vol**2)
 p01 = p1_amb * (1 + (gamma_air-1)/2 * m1_vol**2)**(gamma_air/(gamma_air-1))
 p02 = p01 * eta_diff
 t02 = t01 
-
+t1bis = t02 / (1 + (gamma_air-1)/2 * Mf**2)
+p1bis = p02 / (1 + (gamma_air-1)/2 * Mf**2)**(gamma_air/(gamma_air-1))
 # 2.1 Diffuseur subsonic
 
 # 3. Combustion (Rayleigh + Cantera)
@@ -231,6 +232,14 @@ A2_A1=a2_astar / a1_astar
 a_col = (mdot_air * np.sqrt(t03)) / (p03 * np.sqrt(gamma_out/r_gaz) * (2/(gamma_out+1))**((gamma_out+1)/(2*(gamma_out-1))))
 a4 = (a_col/m4) * ((2/(gamma_out+1))*(1+(gamma_out-1)/2*m4**2))**((gamma_out+1)/(2*(gamma_out-1)))
 
+#caracteritique en sortie de tuyere
+
+t4= t03 / (1 + (gamma_out-1)/2 * m4**2)
+p4 = p03 / (1 + (gamma_out-1)/2 * m4**2)**(gamma_out/(gamma_out-1))
+u4 = m4 * np.sqrt(gamma_out * r_gaz * t4)
+
+
+
 # 6. Performances
 isp = f_target / (mdot_fuel * g0)
 cs = (mdot_fuel / f_target) * 3600
@@ -259,6 +268,10 @@ print(f"Section de Capture (Acap) : {A_cap:.3f} m²")
 print(f"Section levre diffuseur (A1) : {A1:.3f} m²")
 print(f"Section sortie diffuseur (A2) : {A2:.3f} m²")
 print(f"Rapport de section (A2/A1) : {A2/A1:.3f}")
+print(f"Mach sortie diffuseur suppersonic (Mf) : {Mf:.3f}")
+print(f'Température sortie diffuseur supersonic (t1bis) : {t1bis:.1f} K')
+print(f'Pression sortie diffuseur supersonic (p1bis) : {p1bis/1e5:.3f} bar')
+
 
 print(f"\n{'='*20} 2. CHAMBRE DE COMBUSTION {'='*20}")
 print(f"Richesse (phi) : {phi:.2f} | LHV fuel : {lhv_fuel/1e6:.2f} MJ/kg | Rendement combustion : {eta_comb*100:.2f} %")
@@ -289,8 +302,11 @@ print(f"Débit d'air : {mdot_air:.2f} kg/s | Débit fuel : {mdot_fuel:.4f} kg/s"
 
 print(f"\n{'='*20} 4. PARAMÈTRES DU TUYÈRE {'='*20}")
 
+
 print(f"Pression totale tuyère : {p03:.5f} Pa")
 print(f"Pression de sortie de tuyère (p4) : {p4/1e5:.3f} bar")
+print(f"Température totale tuyère : {t03:.1f} K")
+print(f"Température de sortie de tuyère (t4) : {t4:.1f} K")
 print(f"Mach de sortie de tuyère (M4) : {m4:.3f}")
 print(f"Vitesse d'éjection u4 : {u4:.1f} m/s")
 print(f"Débit massique total (mdot) : {mdot_air + mdot_fuel:.3f} kg/s")
@@ -338,6 +354,13 @@ print(f"--- HAUTEURS DE PASSAGE (Y) ---")
 print(f"Hauteur de Capture (H_cap) : {h_cap_sw * 100:.2f} cm")
 print(f"Hauteur de Gorge   (H_1)   : {h_1_sw * 100:.2f} cm")
 print(f"Hauteur de Sortie  (H_2)   : {h_2_sw * 100:.2f} cm")
+print(f"\n--- LONGUEUR DE LA CHAMBRE DE COMBUSTION ---")
+print(f"Longueur de la chambre (L) : {L_chmabre:.3f} m")
+print(f"\n--- AUTRES DIMENSIONS ---")
+print(f"Section de col de la tuyère (a_col) : {a_col:.5f} m²")
+print(f"Section de sortie de la tuyère (a4) : {a4:.5f} m²") 
+print(f'Hauteur au col de la tuyère (H_col) : {(a_col/profondeur)*100:.2f} cm')
+print(f'Hauteur à la sortie de la tuyère (H_4) : {(a4/profondeur)*100:.2f} cm')
 
 print("-" * 60)
 
